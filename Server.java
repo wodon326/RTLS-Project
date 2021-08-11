@@ -7,7 +7,6 @@ import java.sql.*;
 
 
 public class Server {
-   static Scanner scanner = new Scanner(System.in);
    static Queue<Socket> queue = new LinkedList<>();
    static HashMap<Integer,Thread> client_map = new HashMap<Integer,Thread>();
    static ServerSocket listener = null;
@@ -103,7 +102,6 @@ public class Server {
          }
       }
    }
-   //PrintWriter pw = ((Client_Thread)client_map.get(socket)).pw; <- pw얻어서 데이터 전송
    static class Client_Thread extends Thread{
       int Id;
       Socket socket;
@@ -224,7 +222,6 @@ public class Server {
          finally
          {
             try {
-               scanner.close();
                socket.close();
             }
             catch(IOException e){
