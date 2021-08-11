@@ -15,55 +15,14 @@ import java.util.*;
 import java.nio.ByteBuffer;
 
 public class Clientgui extends JFrame {
-	public Clientgui(int to,int ID) {
-		setTitle("ID : "+ ID+" <-> ID : "+to);
-		
-		setBounds(100, 100, 300, 500);
-		getContentPane().setLayout(null);
-		textArea.setEditable(false); 
-		textField = new JTextField();
-		textField.setBounds(12, 430, 179, 21);
-		getContentPane().add(textField);
-		textField.setColumns(10);
-		
-		
-		textArea.setBounds(12, 10, 260, 410);
-		getContentPane().add(textArea);
-		
-		JButton btnNewButton = new JButton("Send");
-		btnNewButton.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-   				String outputMessage = textField.getText();
-   				textField.setText("");
-   				textArea.append("클라이언트"+(int)client_ID+" : " + outputMessage + "\n");
-   				textArea.setCaretPosition(textArea.getText().length());
-   				byte[]msg = outputMessage.getBytes();
-   				byte[]data = new byte[msg.length+3];
-   				data[0] = client_ID;
-   				data[1] = (byte) to;
-	            System.arraycopy(msg, 0, data, 2, msg.length);
-	            buf = makepacket(CMD_MSG,data);
-	            try {
-					oos.writeObject(buf);
-				}
-	            catch (IOException e1) {
-					// TODO Auto-generated catch block
-					e1.printStackTrace();
-				}
-			}
-		});
-		btnNewButton.setBounds(198, 429, 74, 23);
-		getContentPane().add(btnNewButton);
-		
-		
-	}
+	//통신할 때 데이터를 보내고 받을 때 필요한 변수
 	static InputStream  is = null;
-	static byte[] buf = new byte[512];
-	static byte[] buf_RTLS = new byte[13];
-	static byte[] packet = new byte[512];
 	static OutputStream  os;
 	static ObjectInputStream ois;
 	static ObjectOutputStream oos;
+	
+	static byte[] buf = new byte[512];
+	static byte[] buf_RTLS = new byte[13];
 	static Socket socket;
 	static byte client_ID;
 	static final byte STX = (byte)0x02;
@@ -73,38 +32,137 @@ public class Clientgui extends JFrame {
 	static final byte CMD_MSG = (byte)0x02;
 	static final byte CMD_LOGIN = (byte)0x10;
 	static final byte CMD_LIST = (byte)0x11;
-	static JMenu mnNewMenu;
-	static JMenuItem mntmNewMenuItem;
+	static byte state = (byte)0x00;
+	static byte normal = (byte)0x00;
+	static byte danger = (byte)0xFF;
+	
+	static JMenu Menu;
+	static JMenuItem NewMenuItem;
 	public static JPanel contentPane;
 	public static JLabel location = new JLabel(" ");
-	private JTextField textField;
-	static JTextArea textArea = new JTextArea();
+	
 	static Connection conn;
 	static Statement stmt = null;
 	static ResultSet srs; 
 	static int x;
 	static int y;
-	static byte state = (byte)0x00;
-	static byte normal = (byte)0x00;
-	static byte danger = (byte)0xFF;
+	
+	int FLYING_UNIT = 10;//키보드 한번 클릭할때 움직이는 크기
+	ImageIcon icon;//배경
+	public Clientgui(int ID) {
+		icon = new ImageIcon("C:\\Users\\마상균\\eclipse-workspace\\Clientgui\\src\\RTLS map.png");
+		
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setBounds(100, 100, 500, 350);
+		setTitle("ID : "+ ID);
+		JMenuBar menuBar = new JMenuBar();
+		setJMenuBar(menuBar);
+		
+		Menu = new JMenu("Chat Other Client");
+		menuBar.add(Menu);
+		contentPane = new JPanel(){
+            public void paintComponent(Graphics g) {
+                Dimension d = getSize();
+                g.drawImage(icon.getImage(), 0, 0, d.width, d.height, null);
+            }
+        };
+        
+		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
+		setContentPane(contentPane);
+		contentPane.setLayout(null);
+		
+		contentPane.addKeyListener(new MyKeyListener());
+		
+		//초기 위치를 room 7에 배치
+		x = 394;
+		y = 225;
+		location.setLocation(x, y);
+		
+		
+        
+		location.setSize(100, 20);
+		contentPane.add(location);
+		contentPane.setFocusable(true);
+		contentPane.requestFocus();
+	}
+	
+	//키보드의 입력은 인식하여 방향키대로 클라이언트를 움직이는 클래스
+	class MyKeyListener extends KeyAdapter{
+	    public void keyPressed(KeyEvent e){
+	        int keyCode = e.getKeyCode();
+	        switch (keyCode) {
+	        case KeyEvent.VK_UP:
+	        	x=location.getX();
+	        	y=location.getY() - FLYING_UNIT;
+	        	location.setLocation(x, y);
+	        	state = state_check(x,y);
+	            break;
+	        case KeyEvent.VK_DOWN:
+	        	x=location.getX();
+	        	y=location.getY() + FLYING_UNIT;
+	        	location.setLocation(x, y);
+	        	state = state_check(x,y);
+	            break;
+	        case KeyEvent.VK_LEFT:
+	        	x=location.getX() - FLYING_UNIT;
+	        	y=location.getY();
+	        	location.setLocation(x, y);
+	        	state = state_check(x,y);
+	            break;
+	        case KeyEvent.VK_RIGHT:
+	        	x=location.getX() + FLYING_UNIT;
+	        	y=location.getY();
+	        	location.setLocation(x, y);
+	        	state = state_check(x,y);
+	            break;
+	        }
+	    }
+	}
+	
+	//클라이언트의 상태를 체크하는 함수 (danger room : room 1,room 4, room 6)
+	public static byte state_check(int x,int y){
+		if(0<=x&&x<=100&&0<=y&&y<=110)//room 1
+		{
+			location.setForeground(Color.RED);//state가 danger일때 빨간색으로 교체
+			return danger;
+		}
+		else if(360<=x&&x<=500&&0<=y&&y<=110)//room 4
+		{
+			location.setForeground(Color.RED);//state가 danger일때 빨간색으로 교체
+			return danger;
+		}
+		else if(160<=x&&x<=310&&160<=y&&y<=270)//room 6
+		{
+			location.setForeground(Color.RED);//state가 danger일때 빨간색으로 교체
+			return danger;
+		}
+		location.setForeground(Color.BLACK);//앞에 if문을 모두 지나치면 안전하므로 검은색으로 교체
+		return normal;
+	}
 	/**
 	 * Launch the application.
 	 * @throws IOException 
 	 * @throws UnknownHostException 
 	 */
+	
 	public static void main(String[] args) throws UnknownHostException, IOException {
-		socket = new Socket("localhost",3000);
-	    client_ID = (byte)Integer.parseInt(JOptionPane.showInputDialog("로그인 : 양의 정수를 입력해주세요 : "));
+		socket = new Socket("localhost",3000); // 서버에 접속
+		
+	    client_ID = (byte)Integer.parseInt(JOptionPane.showInputDialog("로그인 : 양의 정수를 입력해주세요 : ")); // 로그인 화면
+	    
+	    //로그인 후 배경화면 띄우기
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
 				try {
-					Clientgui_1 frame = new Clientgui_1(client_ID);
+					Clientgui frame = new Clientgui(client_ID);
 					frame.setVisible(true);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
 		});
+		
+		//데이터베이스 연결
 		try {
 			Class.forName("com.mysql.jdbc.Driver"); // MySQL 드라이버 로드
 			conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/rtls_db", "root","0221"); 
@@ -117,63 +175,70 @@ public class Clientgui extends JFrame {
 		} catch (SQLException e) {
 			System.out.println("SQL 실행 에러");
 		}
+		
+		//통신할 때 데이터를 보내고 받을 때 필요한 변수를 설정
 	    os = socket.getOutputStream();
 	    oos = new ObjectOutputStream(os);
 	    is = socket.getInputStream();
 	    ois = new ObjectInputStream(is);
 	    location.setText( Integer.toString((int)client_ID));
 		
+	    //서버에 로그인 패킷 전송
 	    byte[] buf_login = new byte[4];
 	    buf_login[0] = STX;
 	    buf_login[1] = CMD_LOGIN;
 	    buf_login[2] = client_ID;
 	    buf_login[3] = ETX;
 	    oos.writeObject(buf_login);
-	    Receiver t1 = new Receiver();
-	    t1.start(); 
-	    RTLS t2 = new RTLS();
-	    t2.start();
+	    
+	    //데이터를 받는 쓰레드와 실시간 위치 전송 쓰레드 실행
+	    Receiver thread_receiver = new Receiver();
+	    thread_receiver.start(); 
+	    RTLS thread_rtls = new RTLS();
+	    thread_rtls.start();
 	  	}
-
+	
+	//서버에서 데이터를 받았을 때 받은 데이터를 처리하는 쓰레드
 	static class Receiver extends Thread{
 	      public Receiver() {
 	         setName("Receiver");
 	      }
 	      @Override
 	      public void run() {
-
 	         try {
-	            
-	            while(true)
-	            {
-	               buf = (byte[])ois.readObject();
+	            while(true) {
+	               buf = (byte[])ois.readObject(); // 데이터 받기 (데이터를 받을 때까지 대기)
 	               
 	               int sender = 0;
 	               byte[]msg_byte = null;
 	               if(buf[0]==STX&&buf[buf.length-1]==ETX)
 	               {
 	            	   switch(buf[1]){
-	                   case CMD_MSG:
+	                   case CMD_MSG: //CMD_MSG일때 데이터를 분석한 후 채팅 gui에 추가
 	                	   	sender = (int)buf[2];
 	                	   	msg_byte = new byte[buf.length-5];
 	                	   	System.arraycopy(buf, 4, msg_byte, 0, buf.length-5);
 	                	   	String msg_string = new String(msg_byte);
 	                	   	String msg = "클라이언트"+sender+" : "+msg_string;
-	                	   	textArea.append(msg + "\n");
-	           				textArea.setCaretPosition(textArea.getText().length());
+	                	   	
+	                	   	//채팅 gui에 추가
+	                	   	Clientgui_Chat.textArea.append(msg + "\n");
+	                	   	Clientgui_Chat.textArea.setCaretPosition(Clientgui_Chat.textArea.getText().length());
 	                	   	break;
-	                   case CMD_LOGIN:
+	                   case CMD_LOGIN://CMD_LOGIN일때 새로운 클라이언트가 로그인했다는 팝업창을 띄우고 메뉴에 새로운 클라이언트와 채팅할 수 있게 Chat Other Client메뉴에 추가
 	                	   	int new_client = (int)buf[2];
-                	   	
+	                	   	
+	                	   	//새로운 클라이언트가 로그인했다는 팝업창을 띄우기
                 	   		String msg_login = "ID:"+new_client+"가 로그인하였습니다.";
 	                	   	JOptionPane.showMessageDialog(null, msg_login);
 	                	   	
-	               			mntmNewMenuItem = new JMenuItem( Integer.toString(new_client));
-	               			mntmNewMenuItem.addActionListener(new ActionListener() {
+	                	   	//새로운 클라이언트와 채팅할 수 있게 Chat Other Client메뉴에 추가
+	                	   	NewMenuItem = new JMenuItem( Integer.toString(new_client));
+	                	   	NewMenuItem.addActionListener(new ActionListener() {
 	               				public void actionPerformed(ActionEvent e) {
-	               					textArea.setText("");
+	               					Clientgui_Chat.textArea.setText("");
 	               					int to = Integer.parseInt(e.getActionCommand());
-	               					Clientgui chat = new Clientgui(to,(int)client_ID);
+	               					Clientgui_Chat chat = new Clientgui_Chat(to,(int)client_ID);
 	               					try {
 	               						srs = stmt.executeQuery("select * from chat");
 	               						while (srs.next()) {
@@ -183,8 +248,8 @@ public class Clientgui extends JFrame {
 											if((sender_db == (int)client_ID||sender_db==to)&&(receiver_db == (int)client_ID||receiver_db==to))
 											{
 												String msg_db_gui = "클라이언트"+sender_db+" : "+msg_db;
-												textArea.append(msg_db_gui + "\n");
-								   				textArea.setCaretPosition(textArea.getText().length());
+												Clientgui_Chat.textArea.append(msg_db_gui + "\n");
+												Clientgui_Chat.textArea.setCaretPosition(Clientgui_Chat.textArea.getText().length());
 											}
 			               				}
 									} catch (SQLException e1) {
@@ -194,19 +259,19 @@ public class Clientgui extends JFrame {
 		               				chat.setVisible(true);
 		               			}
 	               			});
-	               			mnNewMenu.add(mntmNewMenuItem);
+	                	   	Menu.add(NewMenuItem);
 	               			break;
 	                   case CMD_LIST:
 	                	   	for(int i = 2;i<buf.length-1;i++)
 	                	   	{
 	                	   		if((int)buf[i]!=(int)client_ID)
 	                	   		{
-	                	   			mntmNewMenuItem = new JMenuItem(Integer.toString((int)buf[i]));
-	                	   			mntmNewMenuItem.addActionListener(new ActionListener() {
+	                	   			NewMenuItem = new JMenuItem(Integer.toString((int)buf[i]));
+	                	   			NewMenuItem.addActionListener(new ActionListener() {
 	                	   				public void actionPerformed(ActionEvent e) {
-	                	   					textArea.setText("");
+	                	   					Clientgui_Chat.textArea.setText("");
 	                	   					int to = Integer.parseInt(e.getActionCommand());
-	                	   					Clientgui chat = new Clientgui(to,(int)client_ID);
+	                	   					Clientgui_Chat chat = new Clientgui_Chat(to,(int)client_ID);
 	                	   					try {
 	                	   						srs = stmt.executeQuery("select * from chat");
 	                	   						while (srs.next()) {
@@ -216,8 +281,8 @@ public class Clientgui extends JFrame {
 	        										if((sender_db == (int)client_ID||sender_db==to)&&(receiver_db == (int)client_ID||receiver_db==to))
 	        										{
 	        											String msg_db_gui = "클라이언트"+sender_db+" : "+msg_db;
-	        											textArea.append(msg_db_gui + "\n");
-	        							   				textArea.setCaretPosition(textArea.getText().length());
+	        											Clientgui_Chat.textArea.append(msg_db_gui + "\n");
+	        											Clientgui_Chat.textArea.setCaretPosition(Clientgui_Chat.textArea.getText().length());
 	        										}
 	        		               				}
 	        								} catch (SQLException e1) {
@@ -227,7 +292,7 @@ public class Clientgui extends JFrame {
 	        	               				chat.setVisible(true);
 	        	               			}
 	                	   			});
-			               			mnNewMenu.add(mntmNewMenuItem);
+	                	   			Menu.add(NewMenuItem);
 	                	   		}
 	                	   	}
 	                	   	break;
@@ -257,6 +322,8 @@ public class Clientgui extends JFrame {
 			}
 	      }
 	}
+	
+	//1초마다 실시간 위치를 서버로 전송하는 쓰레드
 	static class RTLS extends Thread{
 	      public RTLS() {
 	         setName("RTLS");
@@ -289,6 +356,8 @@ public class Clientgui extends JFrame {
 	    	  }
 	      }
 	}   
+	
+	//패킷 만드는 함수
 	public static byte[] makepacket(byte cmd, byte[]data){
        byte[]pack = new byte[data.length+3];
        pack[0] = STX;
@@ -297,98 +366,57 @@ public class Clientgui extends JFrame {
        pack[pack.length-1] = ETX;
        return pack;
    	}
+	
+	//int -> byte[] 함수
 	public static byte[] intToBytes( final int i ) {
-	    ByteBuffer bb = ByteBuffer.allocate(4); 
-	    bb.putInt(i); 
-	    return bb.array();
+	    ByteBuffer bytebuffer = ByteBuffer.allocate(4); 
+	    bytebuffer.putInt(i); 
+	    return bytebuffer.array();
 	}
 }
 
-class Clientgui_1 extends JFrame {
-	int FLYING_UNIT = 10;
-	ImageIcon icon;
-	public Clientgui_1(int ID) {
-		icon = new ImageIcon("C:\\Users\\마상균\\eclipse-workspace\\Clientgui\\src\\RTLS map.png");
+class Clientgui_Chat extends JFrame {
+	static JTextField textField;
+	static JTextArea textArea = new JTextArea();
+	public Clientgui_Chat(int to,int ID) {
+		setTitle("ID : "+ ID+" <-> ID : "+to);
 		
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 500, 350);
-		setTitle("ID : "+ ID);
-		JMenuBar menuBar = new JMenuBar();
-		setJMenuBar(menuBar);
-		
-		Clientgui.mnNewMenu = new JMenu("Chat Other Client");
-		menuBar.add(Clientgui.mnNewMenu);
-		Clientgui.contentPane = new JPanel(){
-            public void paintComponent(Graphics g) {
-                Dimension d = getSize();
-                g.drawImage(icon.getImage(), 0, 0, d.width, d.height, null);
-            }
-        };
-        
-		Clientgui.contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
-		setContentPane(Clientgui.contentPane);
-		Clientgui.contentPane.setLayout(null);
-		
-		Clientgui.contentPane.addKeyListener(new MyKeyListener());
-		Clientgui.x = 394;
-		Clientgui.y = 225;
-		Clientgui.location.setLocation(Clientgui.x, Clientgui.y);
+		setBounds(100, 100, 300, 500);
+		getContentPane().setLayout(null);
+		textArea.setEditable(false); 
+		textField = new JTextField();
+		textField.setBounds(12, 430, 179, 21);
+		getContentPane().add(textField);
+		textField.setColumns(10);
 		
 		
-        
-		Clientgui.location.setSize(100, 20);
-		Clientgui.contentPane.add(Clientgui.location);
-		Clientgui.contentPane.setFocusable(true);
-		Clientgui.contentPane.requestFocus();
-	}
-	class MyKeyListener extends KeyAdapter{
-	    public void keyPressed(KeyEvent e){
-	        int keyCode = e.getKeyCode();
-	        switch (keyCode) {
-	        case KeyEvent.VK_UP:
-	        	Clientgui.x=Clientgui.location.getX();
-	        	Clientgui.y=Clientgui.location.getY() - FLYING_UNIT;
-	        	Clientgui.location.setLocation(Clientgui.x, Clientgui.y);
-	        	Clientgui.state = state_check(Clientgui.x,Clientgui.y);
-	            break;
-	        case KeyEvent.VK_DOWN:
-	        	Clientgui.x=Clientgui.location.getX();
-	        	Clientgui.y=Clientgui.location.getY() + FLYING_UNIT;
-	        	Clientgui.location.setLocation(Clientgui.x, Clientgui.y);
-	        	Clientgui.state = state_check(Clientgui.x,Clientgui.y);
-	            break;
-	        case KeyEvent.VK_LEFT:
-	        	Clientgui.x=Clientgui.location.getX() - FLYING_UNIT;
-	        	Clientgui.y=Clientgui.location.getY();
-	        	Clientgui.location.setLocation(Clientgui.x, Clientgui.y);
-	        	Clientgui.state = state_check(Clientgui.x,Clientgui.y);
-	            break;
-	        case KeyEvent.VK_RIGHT:
-	        	Clientgui.x=Clientgui.location.getX() + FLYING_UNIT;
-	        	Clientgui.y=Clientgui.location.getY();
-	        	Clientgui.location.setLocation(Clientgui.x, Clientgui.y);
-	        	Clientgui.state = state_check(Clientgui.x,Clientgui.y);
-	            break;
-	        }
-	    }
-	}
-	public static byte state_check(int x,int y){
-		if(0<=x&&x<=100&&0<=y&&y<=110)
-		{
-			Clientgui.location.setForeground(Color.RED);//state가 danger일때 빨간색으로 교체
-			return Clientgui.danger;
-		}
-		else if(360<=x&&x<=500&&0<=y&&y<=110)
-		{
-			Clientgui.location.setForeground(Color.RED);//state가 danger일때 빨간색으로 교체
-			return Clientgui.danger;
-		}
-		else if(160<=x&&x<=310&&160<=y&&y<=270)
-		{
-			Clientgui.location.setForeground(Color.RED);//state가 danger일때 빨간색으로 교체
-			return Clientgui.danger;
-		}
-		Clientgui.location.setForeground(Color.BLACK);//state가 danger일때 빨간색으로 교체
-		return Clientgui.normal;
+		textArea.setBounds(12, 10, 260, 410);
+		getContentPane().add(textArea);
+		
+		JButton Send_Button = new JButton("Send");
+		Send_Button.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+					String outputMessage = textField.getText();
+					textField.setText("");
+					textArea.append("클라이언트"+(int)Clientgui.client_ID+" : " + outputMessage + "\n");
+					textArea.setCaretPosition(textArea.getText().length());
+					byte[]msg = outputMessage.getBytes();
+					byte[]data = new byte[msg.length+3];
+					data[0] = Clientgui.client_ID;
+					data[1] = (byte) to;
+	            System.arraycopy(msg, 0, data, 2, msg.length);
+	            Clientgui.buf = Clientgui.makepacket(Clientgui.CMD_MSG,data);
+	            try {
+	            	Clientgui.oos.writeObject(Clientgui.buf);
+				}
+	            catch (IOException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				}
+			}
+		});
+		Send_Button.setBounds(198, 429, 74, 23);
+		getContentPane().add(Send_Button);
 	}
 }
+
