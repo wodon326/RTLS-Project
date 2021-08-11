@@ -1,4 +1,3 @@
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.EventQueue;
@@ -6,9 +5,6 @@ import java.awt.Graphics;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -20,9 +16,6 @@ import java.sql.Statement;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
-
-import javax.swing.*;
-import java.awt.*;
 import java.awt.event.*;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
@@ -36,11 +29,14 @@ import javax.swing.JMenuBar;
 
 public class monitoring extends JFrame {
 	static InputStream  is = null;
-	static byte[] buf = new byte[512];
 	static ObjectInputStream ois;
+	
+	static byte[] buf = new byte[512];
 	static Socket socket;
+	
 	private static JPanel contentPane;
 	ImageIcon icon;
+	
 	static final byte STX = (byte)0x02;
 	static final byte ETX = (byte)0x03;
 	static final byte CMD_RTDATA = (byte)0x00;
@@ -48,8 +44,6 @@ public class monitoring extends JFrame {
 	static final byte CMD_MSG = (byte)0x02;
 	static final byte CMD_LOGIN = (byte)0x10;
 	static final byte CMD_LIST = (byte)0x11;
-	static JMenu Client_path;
-	static JMenuItem mntmNewMenuItem;
 	static int id;
 	static int x;
 	static int y;
@@ -57,9 +51,14 @@ public class monitoring extends JFrame {
 	static byte normal = (byte)0x00;
 	static byte danger = (byte)0xFF;
 	static HashMap<Integer,JLabel> client_location = new HashMap<Integer,JLabel>();
+	
+	static JMenu Client_path;
+	static JMenuItem MenuItem_Client_path;
+	
 	static Connection conn;
 	static Statement stmt = null;
 	static ResultSet srs; 
+	
 	static int line_num=0;
 	static int xArray[] = null; 
 	static int yArray[] = null; 
@@ -107,13 +106,15 @@ public class monitoring extends JFrame {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setBounds(100, 100, 500, 350);
 		setTitle("monitoring");
-		icon = new ImageIcon("C:\\Users\\마상균\\eclipse-workspace\\Clientgui\\src\\RTLS map.png");
 		
 		JMenuBar menuBar = new JMenuBar();
 		setJMenuBar(menuBar);
 		
 		Client_path = new JMenu("Client_path");
 		menuBar.add(Client_path);
+		
+		//배경 그리기
+		icon = new ImageIcon("C:\\Users\\마상균\\eclipse-workspace\\Clientgui\\src\\RTLS map.png");
 		contentPane = new JPanel(){
             public void paintComponent(Graphics g) {
                 Dimension d = getSize();
@@ -124,10 +125,6 @@ public class monitoring extends JFrame {
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
 		contentPane.setLayout(null);
-		
-		
-		
-		
 	}
 	
 	static class monitor extends Thread{
@@ -183,8 +180,8 @@ public class monitoring extends JFrame {
 		                        	   }
 			                           contentPane.add(lblNewLabel);
 			                           client_location.put(id, lblNewLabel);
-			                           mntmNewMenuItem = new JMenuItem( Integer.toString(id));
-			                           mntmNewMenuItem.addActionListener(new ActionListener() {
+			                           MenuItem_Client_path = new JMenuItem( Integer.toString(id));
+			                           MenuItem_Client_path.addActionListener(new ActionListener() {
 				               				public void actionPerformed(ActionEvent e) {
 				               					try {
 				               						int path_id = Integer.parseInt(e.getActionCommand());
@@ -218,7 +215,7 @@ public class monitoring extends JFrame {
 												}
 					               			}
 				               			});
-			                           Client_path.add(mntmNewMenuItem);
+			                           Client_path.add(MenuItem_Client_path);
 		                           }
 		                           
 		                	   }
