@@ -20,9 +20,6 @@ public class Clientgui extends JFrame {
 	static OutputStream  os;
 	static ObjectInputStream ois;
 	static ObjectOutputStream oos;
-	
-	static byte[] buf = new byte[512];
-	static byte[] buf_RTLS = new byte[13];
 	static Socket socket;
 	static byte client_ID;
 	static final byte STX = (byte)0x02;
@@ -35,21 +32,19 @@ public class Clientgui extends JFrame {
 	static byte state = (byte)0x00;
 	static byte normal = (byte)0x00;
 	static byte danger = (byte)0xFF;
-	
+	static int x;
+	static int y;
+	int FLYING_UNIT = 10;//키보드 한번 클릭할때 움직이는 크기
+	JPanel contentPane;
 	static JMenu Menu;
-	static JMenuItem NewMenuItem;
-	public static JPanel contentPane;
-	public static JLabel location = new JLabel(" ");
-	
+	static JLabel location = new JLabel(" ");
+	//데이터베이스 변수
 	static Connection conn;
 	static Statement stmt = null;
 	static ResultSet srs; 
-	static int x;
-	static int y;
 	
-	int FLYING_UNIT = 10;//키보드 한번 클릭할때 움직이는 크기
-	ImageIcon icon;//배경
 	public Clientgui(int ID) {
+		ImageIcon icon;//배경
 		icon = new ImageIcon("C:\\Users\\마상균\\eclipse-workspace\\Clientgui\\src\\RTLS map.png");
 		
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -66,27 +61,22 @@ public class Clientgui extends JFrame {
                 g.drawImage(icon.getImage(), 0, 0, d.width, d.height, null);
             }
         };
-        
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
 		contentPane.setLayout(null);
-		
-		contentPane.addKeyListener(new MyKeyListener());
+		contentPane.addKeyListener(new MyKeyListener());//키보드 입력 이벤트 추가
 		
 		//초기 위치를 room 7에 배치
 		x = 394;
 		y = 225;
 		location.setLocation(x, y);
-		
-		
-        
 		location.setSize(100, 20);
 		contentPane.add(location);
 		contentPane.setFocusable(true);
 		contentPane.requestFocus();
 	}
 	
-	//키보드의 입력은 인식하여 방향키대로 클라이언트를 움직이는 클래스
+	//키보드의 입력은 인식하여 방향키대로 클라이언트를 움직이며 상태를 체크하는 클래스
 	class MyKeyListener extends KeyAdapter{
 	    public void keyPressed(KeyEvent e){
 	        int keyCode = e.getKeyCode();
@@ -183,6 +173,14 @@ public class Clientgui extends JFrame {
 	    ois = new ObjectInputStream(is);
 	    location.setText( Integer.toString((int)client_ID));
 		
+	    
+	    
+	    //데이터를 받는 쓰레드와 실시간 위치 전송 쓰레드 실행
+	    Receiver thread_receiver = new Receiver();
+	    thread_receiver.start(); 
+	    RTLS thread_rtls = new RTLS();
+	    thread_rtls.start();
+	    
 	    //서버에 로그인 패킷 전송
 	    byte[] buf_login = new byte[4];
 	    buf_login[0] = STX;
@@ -190,33 +188,29 @@ public class Clientgui extends JFrame {
 	    buf_login[2] = client_ID;
 	    buf_login[3] = ETX;
 	    oos.writeObject(buf_login);
-	    
-	    //데이터를 받는 쓰레드와 실시간 위치 전송 쓰레드 실행
-	    Receiver thread_receiver = new Receiver();
-	    thread_receiver.start(); 
-	    RTLS thread_rtls = new RTLS();
-	    thread_rtls.start();
-	  	}
+	}
 	
 	//서버에서 데이터를 받았을 때 받은 데이터를 처리하는 쓰레드
 	static class Receiver extends Thread{
-	      public Receiver() {
-	         setName("Receiver");
-	      }
-	      @Override
-	      public void run() {
-	         try {
-	            while(true) {
-	               buf = (byte[])ois.readObject(); // 데이터 받기 (데이터를 받을 때까지 대기)
-	               
-	               int sender = 0;
-	               byte[]msg_byte = null;
-	               if(buf[0]==STX&&buf[buf.length-1]==ETX)
-	               {
-	            	   switch(buf[1]){
-	                   case CMD_MSG: //CMD_MSG일때 데이터를 분석한 후 채팅 gui에 추가
-	                	   	sender = (int)buf[2];
-	                	   	msg_byte = new byte[buf.length-5];
+		byte[] buf = new byte[512];
+		JMenuItem NewMenuItem;
+		public Receiver() {
+			setName("Receiver");
+		}
+		@Override
+		public void run() {
+			try {
+				while(true) {
+					buf = (byte[])ois.readObject(); // 데이터 받기 (데이터를 받을 때까지 대기)
+					
+					int sender = 0;
+					byte[]msg_byte = null;
+					if(buf[0]==STX&&buf[buf.length-1]==ETX)
+					{
+						switch(buf[1]){
+						case CMD_MSG: //CMD_MSG일때 데이터를 분석한 후 채팅 gui에 추가
+							sender = (int)buf[2];
+							msg_byte = new byte[buf.length-5];
 	                	   	System.arraycopy(buf, 4, msg_byte, 0, buf.length-5);
 	                	   	String msg_string = new String(msg_byte);
 	                	   	String msg = "클라이언트"+sender+" : "+msg_string;
@@ -234,12 +228,17 @@ public class Clientgui extends JFrame {
 	                	   	
 	                	   	//새로운 클라이언트와 채팅할 수 있게 Chat Other Client메뉴에 추가
 	                	   	NewMenuItem = new JMenuItem( Integer.toString(new_client));
-	                	   	NewMenuItem.addActionListener(new ActionListener() {
+	                	   	
+	                	   	//메뉴 클릭했을때 데이터베이스에서 채팅기록을 가져오고 채팅할수있는 Clientgui_Chat을 띄움
+	                	   	NewMenuItem.addActionListener(new ActionListener() { 
 	               				public void actionPerformed(ActionEvent e) {
+	               					//다른 클라이언트와 채팅한 기록을 전부 날림
 	               					Clientgui_Chat.textArea.setText("");
+	               					
 	               					int to = Integer.parseInt(e.getActionCommand());
 	               					Clientgui_Chat chat = new Clientgui_Chat(to,(int)client_ID);
 	               					try {
+	               						//데이터베이스에서 채팅기록을 가져옴
 	               						srs = stmt.executeQuery("select * from chat");
 	               						while (srs.next()) {
 											int sender_db = srs.getInt("sender");
@@ -266,6 +265,7 @@ public class Clientgui extends JFrame {
 	                	   	{
 	                	   		if((int)buf[i]!=(int)client_ID)
 	                	   		{
+	                	   			//CMD_LOGIN에서 메뉴 추가하는것과 같음
 	                	   			NewMenuItem = new JMenuItem(Integer.toString((int)buf[i]));
 	                	   			NewMenuItem.addActionListener(new ActionListener() {
 	                	   				public void actionPerformed(ActionEvent e) {
@@ -325,29 +325,31 @@ public class Clientgui extends JFrame {
 	
 	//1초마다 실시간 위치를 서버로 전송하는 쓰레드
 	static class RTLS extends Thread{
-	      public RTLS() {
-	         setName("RTLS");
-	      }
-	      @Override
-	      public void run() {
-	    	  while(true)
-	    	  {
-	    		  try {
-	    			  Thread.sleep(1000);
-	    		  } catch (InterruptedException e1) {
-	    			  // TODO Auto-generated catch block
-	    			  e1.printStackTrace();
-	    		  }
-		    	  byte []data_RTLS = new byte[10];
-		    	  byte []int_byte = new byte[4];
-		    	  data_RTLS[0] = client_ID;
-		    	  data_RTLS[1] = state;
-		    	  int_byte = intToBytes(x);
-		    	  System.arraycopy(int_byte, 0, data_RTLS, 2, 4);
-		    	  int_byte = intToBytes(y);
-		    	  System.arraycopy(int_byte, 0, data_RTLS, 6, 4);
-		    	  buf_RTLS= makepacket(CMD_RTDATA,data_RTLS);
-		    	  try {
+		byte[] buf_RTLS = new byte[13];
+		public RTLS() {
+			setName("RTLS");
+		}
+		@Override
+		public void run() {
+			while(true)
+			{
+				//1초마다 CMD_RTDATA 패킷을 만들어 서버로 전송
+				try {
+					Thread.sleep(1000);
+				} catch (InterruptedException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				}
+				byte []data_RTLS = new byte[10];
+				byte []int_byte = new byte[4];
+				data_RTLS[0] = client_ID;
+				data_RTLS[1] = state;
+				int_byte = intToBytes(x);
+				System.arraycopy(int_byte, 0, data_RTLS, 2, 4);
+				int_byte = intToBytes(y);
+				System.arraycopy(int_byte, 0, data_RTLS, 6, 4);
+				buf_RTLS= makepacket(CMD_RTDATA,data_RTLS);
+				try {
 					oos.writeObject(buf_RTLS);
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
@@ -375,39 +377,42 @@ public class Clientgui extends JFrame {
 	}
 }
 
+//채팅할 수 있는 화면 구성하는 클래스
 class Clientgui_Chat extends JFrame {
+	byte[] buf = new byte[512];
 	static JTextField textField;
 	static JTextArea textArea = new JTextArea();
+	
 	public Clientgui_Chat(int to,int ID) {
 		setTitle("ID : "+ ID+" <-> ID : "+to);
-		
 		setBounds(100, 100, 300, 500);
 		getContentPane().setLayout(null);
-		textArea.setEditable(false); 
+		textArea.setEditable(false); // 채팅 기록이 쌓이는 곳이므로 입력 못하게 막아둔 코드
 		textField = new JTextField();
 		textField.setBounds(12, 430, 179, 21);
 		getContentPane().add(textField);
 		textField.setColumns(10);
-		
-		
 		textArea.setBounds(12, 10, 260, 410);
 		getContentPane().add(textArea);
-		
 		JButton Send_Button = new JButton("Send");
+		//Send버튼을 눌렀을 때 CMD_MSG패킷을 만들어 서버로 전송
 		Send_Button.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-					String outputMessage = textField.getText();
-					textField.setText("");
-					textArea.append("클라이언트"+(int)Clientgui.client_ID+" : " + outputMessage + "\n");
-					textArea.setCaretPosition(textArea.getText().length());
-					byte[]msg = outputMessage.getBytes();
-					byte[]data = new byte[msg.length+3];
-					data[0] = Clientgui.client_ID;
-					data[1] = (byte) to;
+				//textField에서 String을 가져오고 textField을 비움
+				String outputMessage = textField.getText();
+				textField.setText("");
+				//textField에서 가져온 String을 textArea에 추가
+				textArea.append("클라이언트"+(int)Clientgui.client_ID+" : " + outputMessage + "\n");
+				textArea.setCaretPosition(textArea.getText().length());
+				//textField에서 가져온 String을 CMD_MSG패킷으로 만들어 서버로 전송
+				byte[]msg = outputMessage.getBytes();
+				byte[]data = new byte[msg.length+3];
+				data[0] = Clientgui.client_ID;
+				data[1] = (byte) to;
 	            System.arraycopy(msg, 0, data, 2, msg.length);
-	            Clientgui.buf = Clientgui.makepacket(Clientgui.CMD_MSG,data);
+	            buf = Clientgui.makepacket(Clientgui.CMD_MSG,data);
 	            try {
-	            	Clientgui.oos.writeObject(Clientgui.buf);
+	            	Clientgui.oos.writeObject(buf);
 				}
 	            catch (IOException e1) {
 					// TODO Auto-generated catch block
